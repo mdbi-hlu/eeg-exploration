@@ -5,3 +5,6 @@ mne
 matplotlib
 seaborn
 xgboost
+scipy
+
+pyedflib
