@@ -109,3 +109,54 @@ def plot_hypnogram_window(times_s, y_true=None, y_pred=None, y_pred_smooth=None,
     plt.legend(loc="upper right")
     plt.tight_layout()
     plt.show()
+
+
+def evaluate_model(y_pred, y_true, idx_va, groups, plot_hypno=True, median_kernel=5):
+
+    # Prediction performance using raw predictions
+    y_pred_dec = decode_stages(y_pred)
+    y_true_dec = decode_stages(y_true)
+    print(f'----- RAW PREDICTIONS -----')
+    print(classification_report(
+        y_true_dec, y_pred_dec,
+        labels=CLASS_ORDER,
+        digits=3,
+        zero_division=0            
+    ))
+    plot_confusion_matrix(y_true_dec, y_pred_dec, labels=CLASS_ORDER, normalize='true')
+    
+    # Prediction performance using smoothed predictions
+    y_pred_smoothed = smooth_by_animal(y_pred, groups=groups[idx_va], width=median_kernel)
+    y_pred_smoothed_dec = decode_stages(y_pred_smoothed)
+    print(f'----- SMOOTHED PREDICTIONS (median kernel={median_kernel}) -----')
+    print(classification_report(
+        y_true_dec, y_pred_smoothed_dec,
+        labels=CLASS_ORDER,
+        digits=3,
+        zero_division=0            
+    ))
+    plot_confusion_matrix(y_true_dec, y_pred_smoothed_dec, labels=CLASS_ORDER, normalize='true')
+
+    # plot hypnogram for one animal in the validation set
+    if plot_hypno:
+        # 1) Build df once for the validation set
+        groups_va = np.asarray(groups)[idx_va]
+        df_val = make_val_df(groups_va, y_true, y_pred, y_pred_smoothed, epoch_len_sec=4.0)
+
+        # (Optional) see available animals and durations
+        summary = df_val.groupby("animal_id")["time_s"].max().div(3600).rename("hours_total")
+
+        # 2) Choose an animal and a time window (in hours)
+        animal = summary.index[0]     # pick one, or any known animal_id
+        win = subset_window(df_val, animal_id=animal, start_h=1.0, duration_h=1.5)
+
+        # 3) Plot
+        plot_hypnogram_window(
+            times_s=win["times_s"],
+            y_true=win["y_true"],
+            y_pred=None,#win["y_pred"],
+            y_pred_smooth=win["y_pred_sm"],
+            title=f"Validation — {animal} — {1.0:.1f}–{1.0+2.0:.1f} h",
+        )
+
+    return y_pred, y_pred_smoothed
